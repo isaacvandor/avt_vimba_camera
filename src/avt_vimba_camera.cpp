@@ -61,9 +61,11 @@ static const char* PixelFormatMode[] = {
   "Mono8",
   "Mono12",
   "Mono12Packed",
+  "Mono16",
   "BayerRG8",
   "BayerRG12Packed",
   "BayerRG12",
+  "BayerRG16",
   "RGB8Packed",
   "BGR8Packed"};
 static const char* BalanceRatioMode[] = {
@@ -242,6 +244,7 @@ void AvtVimbaCamera::updateConfig(Config& config) {
   boost::mutex::scoped_lock lock(config_mutex_);
 
   frame_id_ =  config.frame_id;
+  log_directory_ = config.log_directory;
 
   if (streaming_) {
     stopImaging();

@@ -43,7 +43,14 @@
 #include <camera_info_manager/camera_info_manager.h>
 #include <image_transport/image_transport.h>
 #include <dynamic_reconfigure/server.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
+#include <iostream>
+#include <boost/filesystem.hpp>
+#include <sys/stat.h>
 #include <string>
 
 namespace avt_vimba_camera {
@@ -70,6 +77,8 @@ class MonoCamera {
   image_transport::ImageTransport it_;
   // ROS Camera publisher
   image_transport::CameraPublisher pub_;
+  image_transport::Subscriber sub_;
+  image_transport::Publisher image_pub_;
 
 
 
@@ -87,6 +96,7 @@ class MonoCamera {
   void frameCallback(const FramePtr& vimba_frame_ptr);
   void configure(Config& newconfig, uint32_t level);
   void updateCameraInfo(const Config& config);
+  void imageCb(const sensor_msgs::ImageConstPtr &msg);
 };
 }
 #endif

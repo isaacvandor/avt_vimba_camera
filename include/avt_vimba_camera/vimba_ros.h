@@ -79,9 +79,14 @@ enum PixelFormatMode {
   Mono8,
   Mono12,
   Mono12Packed,
+  Mono16,
   BayerRG8,
+  BayerGR8,
   BayerRG12Packed,
   BayerRG12,
+  BayerGR12,
+  BayerGR12Packed,
+  BayerRG16,
   RGB8Packed,
   BGR8Packed
 };
@@ -120,6 +125,7 @@ class VimbaROS {
     // ROS params
     int num_frames_;
     std::string frame_id_;
+    std::string log_directory_;
     std::string trigger_source_;
     int trigger_source_int_;
 

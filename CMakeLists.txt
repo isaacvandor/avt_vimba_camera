@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   polled_camera
   nodelet
+  cv_bridge
 )
 
 #Get architecture

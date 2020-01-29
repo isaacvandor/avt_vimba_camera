@@ -3,12 +3,12 @@
 	<group ns="camera">
 		<node name="image_proc" pkg="image_proc" type="image_proc"/>
 	</group>
-
 	<node name="camera" pkg="avt_vimba_camera" type="mono_camera_node" output="screen">
 		<param name="guid" value="50-0503400918"/>
 		<param name="ip" value="192.168.100.102"/>
 		<param name="camera_info_url" value="file://$(find avt_vimba_camera)/calibrations/calibration_50-0503343290.yaml"/>
-		<param name="frame_id" value="left_optical"/>
+		<param name="frame_id" value="sentry_camera"/>
+		<param name="log_directory" value="/home/ivandor/sentry_cam_data/"/>
 		<param name="trig_timestamp_topic" value=""/>
 		<param name="show_debug_prints" value="true"/>
 
@@ -38,11 +38,15 @@
 			1. Mono8
 			2. Mono12
 			3. Mono12Packed
-			4. BayerRG8
-			5. BayerRG12Packed
-			6. BayerGR12
-			7. RGB8Packed
-			8. BGR8Packed
+			4. Mono16
+			5. BayerRG8
+			6. BayerGR8
+			6. BayerRG12Packed
+			7. BayerGR12
+			8. BayerGR12Packed
+			9. BayerRG16
+			10. RGB8Packed
+			11. BGR8Packed
 		-->
 		<param name="pixel_format" value="BayerRG8"/>
 		<!-- Exposure in us -->

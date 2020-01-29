@@ -34,6 +34,7 @@
 
 #define DEBUG_PRINTS 1
 
+static const std::string OPENCV_WINDOW = "Image window";
 namespace avt_vimba_camera {
 
 MonoCamera::MonoCamera(ros::NodeHandle& nh, ros::NodeHandle& nhp) : nh_(nh), nhp_(nhp), it_(nhp), cam_(ros::this_node::getName()) {
@@ -46,6 +47,12 @@ MonoCamera::MonoCamera(ros::NodeHandle& nh, ros::NodeHandle& nhp) : nh_(nh), nhp
   // Set the image publisher before the streaming
   pub_  = it_.advertiseCamera("image_raw",  1);
 
+  sub_ = it_.subscribe("image_raw", 1, &MonoCamera::imageCb, this);
+
+  image_pub_ = it_.advertise("/image_converter/output_video", 1);
+
+  cv::namedWindow(OPENCV_WINDOW);
+
   // Set the frame callback
   cam_.setCallback(boost::bind(&avt_vimba_camera::MonoCamera::frameCallback, this, _1));
 
@@ -54,6 +61,8 @@ MonoCamera::MonoCamera(ros::NodeHandle& nh, ros::NodeHandle& nhp) : nh_(nh), nhp
   nhp_.param("guid", guid_, std::string(""));
   nhp_.param("camera_info_url", camera_info_url_, std::string(""));
   std::string frame_id;
+  std::string log_directory;
+  nhp_.param("log_directory", log_directory, std::string(""));
   nhp_.param("frame_id", frame_id, std::string(""));
   nhp_.param("show_debug_prints", show_debug_prints_, false);
 
@@ -67,6 +76,7 @@ MonoCamera::MonoCamera(ros::NodeHandle& nh, ros::NodeHandle& nhp) : nh_(nh), nhp
 MonoCamera::~MonoCamera(void) {
   cam_.stop();
   pub_.shutdown();
+  cv::destroyWindow(OPENCV_WINDOW);
 }
 
 void MonoCamera::frameCallback(const FramePtr& vimba_frame_ptr) {
@@ -83,6 +93,47 @@ void MonoCamera::frameCallback(const FramePtr& vimba_frame_ptr) {
     }
   }
   // updater_.update();
+}
+
+void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
+    cv_bridge::CvImagePtr cv_ptr;
+    try {
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception &e) {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    /*
+    // Draw an example circle on the video stream
+    if (cv_ptr->image.rows > 60 && cv_ptr->image.cols > 60)
+        cv::circle(cv_ptr->image, cv::Point(50, 50), 10, CV_RGB(255, 0, 0));
+*/
+    // Update GUI Window
+    cv::imshow(OPENCV_WINDOW, cv_ptr->image);
+    cv::waitKey(3);
+
+    std::string log_directory;
+    nhp_.getParam("log_directory", log_directory);
+    //const char dir_path[] ="/home/ivandor/sentry_cam_data/logdir/";
+    boost::filesystem::path dir_target(log_directory);
+    boost::filesystem::path path_folder = dir_target.parent_path();
+    if (!boost::filesystem::exists(path_folder)) {
+        boost::filesystem::create_directories(path_folder);
+        ROS_ERROR_STREAM("log directory created");
+    }
+
+    static int img_count = 0;
+    std::stringstream ss;
+    ss<<"foo_img"<<img_count<<".tiff";
+    auto str_target = log_directory + ss.str();
+    cv::imwrite(str_target, cv_ptr->image);
+    img_count++;
+    ROS_INFO_STREAM("Writing image "<<img_count);
+
+    // Output modified video stream
+    image_pub_.publish(cv_ptr->toImageMsg());
 }
 
 /** Dynamic reconfigure callback
@@ -122,6 +173,15 @@ void MonoCamera::updateCameraInfo(const avt_vimba_camera::AvtVimbaCameraConfig& 
   // Set the frame id
   ci.header.frame_id = config.frame_id;
 
+  std::string logdir;
+  logdir = config.log_directory;
+  std::string log_directory;
+  nhp_.getParam("log_directory", log_directory);
+  if (log_directory != logdir) {
+      ROS_ERROR_STREAM("setting log directory to: "<<logdir);
+      nhp_.setParam("log_directory", logdir);
+  }
+
   // Set the operational parameters in CameraInfo (binning, ROI)
   int binning_or_decimation_x = std::max(config.binning_x, config.decimation_x);
   int binning_or_decimation_y = std::max(config.binning_y, config.decimation_y);
@@ -157,7 +217,7 @@ void MonoCamera::updateCameraInfo(const avt_vimba_camera::AvtVimbaCameraConfig& 
                                    && ci.height == config.height);
   // check
   ci.roi.do_rectify = roiMatchesCalibration || resolutionMatchesCalibration;
-
+  //ci.roi.do_rectify = false;
   // push the changes to manager
   info_man_->setCameraInfo(ci);
 }

@@ -136,6 +136,7 @@ class AvtVimbaCamera {
   int num_frames_;
   std::string guid_;
   std::string frame_id_;
+  std::string log_directory_;
   std::string trigger_source_;
   int trigger_source_int_;
 
