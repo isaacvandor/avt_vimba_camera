@@ -125,8 +125,15 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
     }
 
     static int img_count = 0;
+    time_t rawtime;
+    struct tm* timeinfo;
+    char time_buf [80];
+    time (&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(time_buf,80,"sentry.%Y%m%d.%H%M%S.", timeinfo); //Sentry vehicle, %i for usecs, %f for framecount
+    //ROS_ERROR_STREAM("filename is: "<<buffer);
     std::stringstream ss;
-    ss<<"foo_img"<<img_count<<".tiff";
+    ss<<time_buf<<img_count<<".tiff";
     auto str_target = log_directory + ss.str();
     cv::imwrite(str_target, cv_ptr->image);
     img_count++;

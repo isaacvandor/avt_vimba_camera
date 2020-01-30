@@ -52,6 +52,7 @@
 #include <boost/filesystem.hpp>
 #include <sys/stat.h>
 #include <string>
+#include <time.h>
 
 namespace avt_vimba_camera {
 class MonoCamera {
