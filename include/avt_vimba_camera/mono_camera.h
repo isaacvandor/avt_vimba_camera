@@ -36,6 +36,7 @@
 #include <avt_vimba_camera/avt_vimba_camera.h>
 #include <avt_vimba_camera/AvtVimbaCameraConfig.h>
 #include <avt_vimba_camera/avt_vimba_api.h>
+//#include <avt_vimba_camera/tiftags.h>
 
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
@@ -53,6 +54,7 @@
 #include <sys/stat.h>
 #include <string>
 #include <time.h>
+#include <tiffio.h>
 
 namespace avt_vimba_camera {
 class MonoCamera {

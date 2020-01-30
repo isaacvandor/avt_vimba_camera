@@ -33,6 +33,7 @@
 #include <avt_vimba_camera/mono_camera.h>
 
 #define DEBUG_PRINTS 1
+#define TIFF_TAG_VER 2
 
 static const std::string OPENCV_WINDOW = "Image window";
 namespace avt_vimba_camera {
@@ -114,6 +115,7 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
     cv::imshow(OPENCV_WINDOW, cv_ptr->image);
     cv::waitKey(3);
 
+    //Log to Directory
     std::string log_directory;
     nhp_.getParam("log_directory", log_directory);
     //const char dir_path[] ="/home/ivandor/sentry_cam_data/logdir/";
@@ -124,6 +126,7 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
         ROS_ERROR_STREAM("log directory created");
     }
 
+    //Set Filename
     static int img_count = 0;
     time_t rawtime;
     struct tm* timeinfo;
@@ -133,7 +136,7 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
     strftime(time_buf,80,"sentry.%Y%m%d.%H%M%S.", timeinfo); //Sentry vehicle, %i for usecs, %f for framecount
     //ROS_ERROR_STREAM("filename is: "<<buffer);
     std::stringstream ss;
-    ss<<time_buf<<img_count<<".tiff";
+    ss<<time_buf<<img_count<<".tif";
     auto str_target = log_directory + ss.str();
     cv::imwrite(str_target, cv_ptr->image);
     img_count++;
@@ -141,6 +144,78 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
 
     // Output modified video stream
     image_pub_.publish(cv_ptr->toImageMsg());
+
+    TIFF *tif = TIFFOpen(str_target.c_str(), "w");
+    if (!tif) {
+        ROS_ERROR_STREAM("TIFFOpen() Failed!");
+        return;
+    }
+    else {
+        int width = 1360;
+        int height  = 1024;
+        size_t stride = width;
+        const int npixels = height*width;
+        uint16_t *ImageBuffer;
+        //ImageBuffer = malloc(3*npixels*sizeof(uint16_t));
+        ImageBuffer = new uint16_t[3*npixels*sizeof(uint16_t)];
+        int ret = 0;
+        uint16_t *row_ptr = ImageBuffer;
+
+        auto scanlineSize = TIFFScanlineSize(tif);
+        auto scanline = (unsigned char*)_TIFFmalloc(scanlineSize);
+
+        char* software_tag = "AUV Sentry Camera Driver used by NDSF - Isaac Vandor";
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(tif, TIFFTAG_SOFTWARE, software_tag);
+
+        for (size_t i=0;i<height;i++) {
+            memcpy(scanline, row_ptr+stride, scanlineSize);
+            ROS_WARN_STREAM("in for loop & row_ptr: "<<row_ptr);
+            if (TIFFWriteScanline(tif, scanline, i, 0) !=1) {
+                ROS_ERROR_STREAM("error writing tif data");
+            }
+        }
+        _TIFFfree(scanline);
+
+    }
+
+#if TIFF_TAG_VER != 2
+    ROS_ERROR_STREAM("check tif tag version!");
+    return;
+#else
+    /*
+    TIFFMergeFieldInfo(cv_ptr->image, ProTiffFieldInfo, PROTIFFTAG_N);
+
+    TIFFSetField(image, PROTIFFTAG_MAGIC, (uint32_t)PROTIFFTAG_MAGIC_VALUE);
+    TIFFSetField(image, PROTIFFTAG_VERSION, PROTIFFTAG_CURRENT_VERSION);
+    TIFFSetField(image, PROTIFFTAG_IMG_NUM, framecount);
+    TIFFSetField(image, PROTIFFTAG_TIME_LO, ((uint32_t)(utime & 0xffffffff)));
+    TIFFSetField(image, PROTIFFTAG_TIME_HI, ((uint32_t)((utime >>32) & 0xffffffff)));
+    TIFFSetField(image, PROTIFFTAG_BINNINGX, prosilica_get_pvattribute_u32(handle, "BinningX"));
+    TIFFSetField(image, PROTIFFTAG_BINNINGY, prosilica_get_pvattribute_u32(handle, "BinningY"));
+    TIFFSetField(image, PROTIFFTAG_REGIONX,  prosilica_get_pvattribute_u32(handle, "RegionX"));
+    TIFFSetField(image, PROTIFFTAG_REGIONY,  prosilica_get_pvattribute_u32(handle, "RegionY"));
+    TIFFSetField(image, PROTIFFTAG_HEIGHT,   prosilica_get_pvattribute_u32(handle, "Height"));
+    TIFFSetField(image, PROTIFFTAG_WIDTH,    prosilica_get_pvattribute_u32(handle, "Width"));
+
+    TIFFSetField(image, PROTIFFTAG_FRAMERATE, prosilica_get_pvattribute_f32(handle, "FrameRate"));
+    TIFFSetField(image, PROTIFFTAG_STREAMBYTESPERSECOND, prosilica_get_pvattribute_u32(handle, "StreamBytesPerSecond"));
+
+    TIFFSetField(image, PROTIFFTAG_GAINVALUE, prosilica_get_pvattribute_u32(handle, "GainValue"));
+    TIFFSetField(image, PROTIFFTAG_EXPOSUREAUTOTARGET, prosilica_get_pvattribute_u32(handle, "ExposureAutoTarget"));
+    pvattribute_t exposureMode = prosilica_get_attribute(handle, "ExposureMode");
+    TIFFSetField(image, PROTIFFTAG_EXPOSUREMODE, exposureMode.value);
+    TIFFSetField(image, PROTIFFTAG_EXPOSUREVALUE, prosilica_get_pvattribute_u32(handle, "ExposureValue"));
+
+    TIFFSetField(image, PROTIFFTAG_STATFRAMERATE, prosilica_get_pvattribute_f32(handle, "StatFrameRate"));
+    TIFFSetField(image, PROTIFFTAG_STATFRAMESCOMPLETED, prosilica_get_pvattribute_u32(handle, "StatFramesCompleted"));
+    TIFFSetField(image, PROTIFFTAG_STATFRAMESDROPPED, prosilica_get_pvattribute_u32(handle, "StatFramesDropped"));
+*/
+#endif
+
 }
 
 /** Dynamic reconfigure callback

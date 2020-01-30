@@ -17,6 +17,11 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
 )
 
+find_package(TIFF)
+if (NOT TIFF_FOUND)
+  message (SEND_ERROR "on ubuntu `sudo apt-get install libtiff5-dev`")
+endif()
+
 #Get architecture
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(TargetArchitecture)
@@ -41,6 +46,7 @@ include_directories(
   #${libvimba_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
   include
+  ${TIFF_INCLUDE_DIR}
 )
 
 # C++11 support
@@ -98,6 +104,7 @@ add_executable(mono_camera_node
 )
 
 add_dependencies_and_linkings(mono_camera_node)
+target_link_libraries(mono_camera_node ${TIFF_LIBRARIES})
 
 add_executable(stereo_camera_node
   src/nodes/stereo_camera_node.cpp
