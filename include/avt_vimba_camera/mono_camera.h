@@ -36,7 +36,7 @@
 #include <avt_vimba_camera/avt_vimba_camera.h>
 #include <avt_vimba_camera/AvtVimbaCameraConfig.h>
 #include <avt_vimba_camera/avt_vimba_api.h>
-//#include <avt_vimba_camera/tiftags.h>
+//#include "tiftags.h"
 
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>

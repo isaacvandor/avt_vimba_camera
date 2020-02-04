@@ -96,10 +96,10 @@ void MonoCamera::frameCallback(const FramePtr& vimba_frame_ptr) {
   // updater_.update();
 }
 
-void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
+void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &img) {
     cv_bridge::CvImagePtr cv_ptr;
     try {
-        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+        cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
     }
     catch (cv_bridge::Exception &e) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
@@ -145,78 +145,113 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &msg) {
     // Output modified video stream
     image_pub_.publish(cv_ptr->toImageMsg());
 
-    TIFF *tif = TIFFOpen(str_target.c_str(), "w");
-    if (!tif) {
-        ROS_ERROR_STREAM("TIFFOpen() Failed!");
+    TIFF* outfile = TIFFOpen(str_target.c_str(), "w");
+    if (!outfile) {
+        ROS_ERROR_STREAM("TIFFOpen() FAILED! Filename: "<<str_target.c_str()<<"\n");
         return;
     }
-    else {
-        int width = 1360;
-        int height  = 1024;
-        size_t stride = width;
-        const int npixels = height*width;
-        uint16_t *ImageBuffer;
-        //ImageBuffer = malloc(3*npixels*sizeof(uint16_t));
-        ImageBuffer = new uint16_t[3*npixels*sizeof(uint16_t)];
-        int ret = 0;
-        uint16_t *row_ptr = ImageBuffer;
+/*
+    TIFFMergeFieldInfo(outfile, ProTiffFieldInfo, PROTIFFTAG_N);
+    TIFFSetField(outfile, PROTIFFTAG_MAGIC, (uint32_t)PROTIFFTAG_MAGIC_VALUE);
+    TIFFSetField(outfile, PROTIFFTAG_VERSION, PROTIFFTAG_CURRENT_VERSION);
+    writeFeatureTifftag<int32_t>    (outfile, img,       PROTIFFTAG_BINNINGHORIZONTAL, "BinningHorizontal");
+    writeFeatureTifftag<int32_t>    (outfile, img,         PROTIFFTAG_BINNINGVERTICAL, "BinningVertical");
+    writeFeatureTifftag<int32_t>    (outfile, img,      PROTIFFTAG_EXPOSUREAUTOTARGET, "ExposureAutoTarget");
+    writeFeatureTifftag<std::string>(outfile, img,            PROTIFFTAG_EXPOSUREAUTO, "ExposureAuto");
+    std::vector<std::string> exposureNames = {"ChunkExposureTime", "ExposureTimeAbs"};
+    writeFeatureTifftag_multi<int32_t>(outfile, img,         PROTIFFTAG_EXPOSURETIMEABS, exposureNames);
+    writeFeatureTifftag<double>     (outfile, img, PROTIFFTAG_ACQUISITIONFRAMERATEABS, "AcquisitionFrameRateAbs");
+    std::vector<std::string> gainNames = {"ChunkGain", "GainRaw", "Gain"};
+    writeFeatureTifftag_multi<int32_t>(outfile, img,                    PROTIFFTAG_GAIN, gainNames);
+    writeFeatureTifftag<int32_t>      (outfile, img,                  PROTIFFTAG_HEIGHT, "Height");
+    writeFeatureTifftag<int32_t>      (outfile, img,                 PROTIFFTAG_OFFSETX, "OffsetX");
+    writeFeatureTifftag<int32_t>      (outfile, img,                 PROTIFFTAG_OFFSETY, "OffsetY");
+    writeFeatureTifftag<double>(outfile, img,           PROTIFFTAG_STATFRAMERATE, "StatFrameRate");
+    writeFeatureTifftag<int32_t>      (outfile, img,      PROTIFFTAG_STATFRAMEDELIVERED, "StatFrameDelivered");
+    writeFeatureTifftag<int32_t>      (outfile, img,        PROTIFFTAG_STATFRAMEDROPPED, "StatFrameDropped");
+    writeFeatureTifftag<int32_t>      (outfile, img,    PROTIFFTAG_STREAMBYTESPERSECOND, "StreamBytesPerSecond");
+    writeFeatureTifftag<int32_t>      (outfile, img,                   PROTIFFTAG_WIDTH, "Width");
+    writeFeatureTifftag<std::string>(outfile, img,                PROTIFFTAG_NIR_MODE, "NirMode", false);
+    TIFFSetField(outfile, PROTIFFTAG_UTIME_LO, utime_lo);
+    TIFFSetField(outfile, PROTIFFTAG_UTIME_HI, utime_hi);
+    TIFFSetField(outfile, PROTIFFTAG_IMG_NUM, img_num);
+    TIFFSetField(outfile, PROTIFFTAG_IMG_FILENAME, filename.c_str());
+    TIFFSetField(outfile, PROTIFFTAG_IMG_SURVEYID, currentSurveyId.c_str());
 
-        auto scanlineSize = TIFFScanlineSize(tif);
-        auto scanline = (unsigned char*)_TIFFmalloc(scanlineSize);
-
-        char* software_tag = "AUV Sentry Camera Driver used by NDSF - Isaac Vandor";
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
-        TIFFSetField(tif, TIFFTAG_SOFTWARE, software_tag);
-
-        for (size_t i=0;i<height;i++) {
-            memcpy(scanline, row_ptr+stride, scanlineSize);
-            ROS_WARN_STREAM("in for loop & row_ptr: "<<row_ptr);
-            if (TIFFWriteScanline(tif, scanline, i, 0) !=1) {
-                ROS_ERROR_STREAM("error writing tif data");
-            }
-        }
-        _TIFFfree(scanline);
-
+    // set some standard metadata tifftags
+    TIFFSetField(outfile, TIFFTAG_DOCUMENTNAME, filename.c_str());
+    writeFeatureTifftag<std::string>(outfile, img, TIFFTAG_MAKE, "DeviceVendorName");
+    writeFeatureTifftag<std::string>(outfile, img, TIFFTAG_MODEL, "DeviceModelName");
+    writeFeatureTifftag<std::string>(outfile, img, TIFFTAG_CAMERASERIALNUMBER, "DeviceID");
+    writeFeatureTifftag<std::string>(outfile, img, TIFFTAG_SOFTWARE, "DeviceFirmwareVersion");
+    /*
+    if (!artist.empty()) {
+        TIFFSetField(outfile, TIFFTAG_ARTIST, artist.c_str());
+    }
+    if (!copyright.empty()) {
+        TIFFSetField(outfile, TIFFTAG_COPYRIGHT, copyright.c_str());
     }
 
-#if TIFF_TAG_VER != 2
-    ROS_ERROR_STREAM("check tif tag version!");
-    return;
-#else
-    /*
-    TIFFMergeFieldInfo(cv_ptr->image, ProTiffFieldInfo, PROTIFFTAG_N);
+    TIFFSetField(outfile, TIFFTAG_HOSTCOMPUTER, hostcomputer.c_str());
+    TIFFSetField(outfile, TIFFTAG_DATETIME, datetimeStr.c_str());
+    //TIFFSetField(outfile, EXIFTAG_DATETIMEORIGINAL, datetimeStr.c_str()); // Unknown??
 
-    TIFFSetField(image, PROTIFFTAG_MAGIC, (uint32_t)PROTIFFTAG_MAGIC_VALUE);
-    TIFFSetField(image, PROTIFFTAG_VERSION, PROTIFFTAG_CURRENT_VERSION);
-    TIFFSetField(image, PROTIFFTAG_IMG_NUM, framecount);
-    TIFFSetField(image, PROTIFFTAG_TIME_LO, ((uint32_t)(utime & 0xffffffff)));
-    TIFFSetField(image, PROTIFFTAG_TIME_HI, ((uint32_t)((utime >>32) & 0xffffffff)));
-    TIFFSetField(image, PROTIFFTAG_BINNINGX, prosilica_get_pvattribute_u32(handle, "BinningX"));
-    TIFFSetField(image, PROTIFFTAG_BINNINGY, prosilica_get_pvattribute_u32(handle, "BinningY"));
-    TIFFSetField(image, PROTIFFTAG_REGIONX,  prosilica_get_pvattribute_u32(handle, "RegionX"));
-    TIFFSetField(image, PROTIFFTAG_REGIONY,  prosilica_get_pvattribute_u32(handle, "RegionY"));
-    TIFFSetField(image, PROTIFFTAG_HEIGHT,   prosilica_get_pvattribute_u32(handle, "Height"));
-    TIFFSetField(image, PROTIFFTAG_WIDTH,    prosilica_get_pvattribute_u32(handle, "Width"));
+    // position of image in frame
+    writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_PIXAR_IMAGEFULLWIDTH, "WidthMax");
+    writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_PIXAR_IMAGEFULLLENGTH, "HeightMax");
+    writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_XPOSITION, "OffsetX");
+    writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_YPOSITION, "OffsetY");
 
-    TIFFSetField(image, PROTIFFTAG_FRAMERATE, prosilica_get_pvattribute_f32(handle, "FrameRate"));
-    TIFFSetField(image, PROTIFFTAG_STREAMBYTESPERSECOND, prosilica_get_pvattribute_u32(handle, "StreamBytesPerSecond"));
+    // imaging metadata stuff (TODO)
+    //EXIFTAG_FOCALLENGTH
+    //EXIFTAG_FOCALLENGTHIN35MMFILM
+    //EXIFTAG_EXPOSURETIME
+    //EXIFTAG_FNUMBER
+    //EXIFTAG_EXPOSUREPROGRAM
 
-    TIFFSetField(image, PROTIFFTAG_GAINVALUE, prosilica_get_pvattribute_u32(handle, "GainValue"));
-    TIFFSetField(image, PROTIFFTAG_EXPOSUREAUTOTARGET, prosilica_get_pvattribute_u32(handle, "ExposureAutoTarget"));
-    pvattribute_t exposureMode = prosilica_get_attribute(handle, "ExposureMode");
-    TIFFSetField(image, PROTIFFTAG_EXPOSUREMODE, exposureMode.value);
-    TIFFSetField(image, PROTIFFTAG_EXPOSUREVALUE, prosilica_get_pvattribute_u32(handle, "ExposureValue"));
+    // camera calibration (TODO)
+    //TIFFTAG_CAMERACALIBRATION1
+    //TIFFTAG_CAMERACALIBRATION2
+    //TIFFTAG_CALIBRATIONILLUMINANT1
+    //TIFFTAG_CALIBRATIONILLUMINANT2
 
-    TIFFSetField(image, PROTIFFTAG_STATFRAMERATE, prosilica_get_pvattribute_f32(handle, "StatFrameRate"));
-    TIFFSetField(image, PROTIFFTAG_STATFRAMESCOMPLETED, prosilica_get_pvattribute_u32(handle, "StatFramesCompleted"));
-    TIFFSetField(image, PROTIFFTAG_STATFRAMESDROPPED, prosilica_get_pvattribute_u32(handle, "StatFramesDropped"));
 */
-#endif
+    // fill in the image data / formatting stuff / etc
+    size_t stride=0;
+    bool sixteen_bit = false;
+    TIFFSetField(outfile, TIFFTAG_SAMPLESPERPIXEL, 1);
+    TIFFSetField(outfile, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    TIFFSetField(outfile, TIFFTAG_BITSPERSAMPLE, 8);
+    TIFFSetField(outfile, TIFFTAG_IMAGEWIDTH, 600);
+    TIFFSetField(outfile, TIFFTAG_IMAGELENGTH, 600);
+    stride = img->width;
 
+    TIFFSetField(outfile, TIFFTAG_IMAGEWIDTH, img->width);
+    TIFFSetField(outfile, TIFFTAG_IMAGELENGTH, img->height);
+    TIFFSetField(outfile, TIFFTAG_ROWSPERSTRIP, 1);
+    TIFFSetField(outfile, TIFFTAG_FILLORDER, FILLORDER_MSB2LSB);
+    TIFFSetField(outfile, TIFFTAG_COPYRIGHT, "Isaac Vandor - Test");
+
+    //setup compression
+    TIFFSetField(outfile, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+
+    int rc;
+    uint8_t* row_ptr = reinterpret_cast<uint8_t*>(cv_ptr->image.data);
+    for (size_t i=0; i<img->height;i++) {
+        ROS_WARN_STREAM("Writing image via writescanline");
+        rc = TIFFWriteScanline(outfile, row_ptr, i, 0);
+        row_ptr += stride;
+        if (rc < 0) {
+            break;
+        }
+    }
+    if (rc <0) {
+        ROS_ERROR_STREAM("unable to write tiff!");
+    }
+    TIFFClose(outfile);
+    outfile= NULL;
 }
+
 
 /** Dynamic reconfigure callback
 *
