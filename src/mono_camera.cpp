@@ -145,6 +145,8 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &img) {
     // Output modified video stream
     image_pub_.publish(cv_ptr->toImageMsg());
 
+    sensor_msgs::CameraInfo ci = info_man_->getCameraInfo();
+
     TIFF* outfile = TIFFOpen(str_target.c_str(), "w");
     if (!outfile) {
         ROS_ERROR_STREAM("TIFFOpen() FAILED! Filename: "<<str_target.c_str()<<"\n");
@@ -201,29 +203,21 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &img) {
     writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_PIXAR_IMAGEFULLLENGTH, "HeightMax");
     writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_XPOSITION, "OffsetX");
     writeFeatureTifftag<int32_t>     (outfile, img, TIFFTAG_YPOSITION, "OffsetY");
-
-    // imaging metadata stuff (TODO)
-    //EXIFTAG_FOCALLENGTH
-    //EXIFTAG_FOCALLENGTHIN35MMFILM
-    //EXIFTAG_EXPOSURETIME
-    //EXIFTAG_FNUMBER
-    //EXIFTAG_EXPOSUREPROGRAM
-
-    // camera calibration (TODO)
-    //TIFFTAG_CAMERACALIBRATION1
-    //TIFFTAG_CAMERACALIBRATION2
-    //TIFFTAG_CALIBRATIONILLUMINANT1
-    //TIFFTAG_CALIBRATIONILLUMINANT2
-
 */
+    ROS_ERROR_STREAM("Frame id: "<<ci.header.frame_id);
+    //TIFFSetField(outfile, TIFFTAG_SOFTWARE, 1);
+    TIFFSetField(outfile, TIFFTAG_ARTIST, ci.header.frame_id);
+    //TIFFSetField(outfile, TIFFTAG_XRESOLUTION, ci.binning_x);
+    //TIFFSetField(outfile, TIFFTAG_YRESOLUTION, ci.binning_y);
+
     // fill in the image data / formatting stuff / etc
     size_t stride=0;
     bool sixteen_bit = false;
     TIFFSetField(outfile, TIFFTAG_SAMPLESPERPIXEL, 1);
     TIFFSetField(outfile, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
     TIFFSetField(outfile, TIFFTAG_BITSPERSAMPLE, 8);
-    TIFFSetField(outfile, TIFFTAG_IMAGEWIDTH, 600);
-    TIFFSetField(outfile, TIFFTAG_IMAGELENGTH, 600);
+    TIFFSetField(outfile, TIFFTAG_IMAGEWIDTH, ci.width);
+    TIFFSetField(outfile, TIFFTAG_IMAGELENGTH, ci.height);
     stride = img->width;
 
     TIFFSetField(outfile, TIFFTAG_IMAGEWIDTH, img->width);
@@ -238,7 +232,6 @@ void MonoCamera::imageCb(const sensor_msgs::ImageConstPtr &img) {
     int rc;
     uint8_t* row_ptr = reinterpret_cast<uint8_t*>(cv_ptr->image.data);
     for (size_t i=0; i<img->height;i++) {
-        ROS_WARN_STREAM("Writing image via writescanline");
         rc = TIFFWriteScanline(outfile, row_ptr, i, 0);
         row_ptr += stride;
         if (rc < 0) {
